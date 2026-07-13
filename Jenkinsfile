@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'selfAgent' }
     stages {
         stage('Build ') {
             steps {
