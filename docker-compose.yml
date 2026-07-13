@@ -1,5 +1,5 @@
 services:
-
+ 
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -9,7 +9,9 @@ services:
       - OLLAMA_KEEP_ALIVE=24h
       - OLLAMA_NUM_PARALLEL=4
     restart: unless-stopped
-
+    networks:
+      - proxy-network
+ 
   ollama-init:
     image: ollama/ollama:latest
     depends_on:
@@ -31,7 +33,7 @@ services:
     restart: "no"
     networks:
       - proxy-network
-
+ 
   api:
     build:
       context: .
@@ -74,26 +76,26 @@ services:
     restart: unless-stopped
     networks:
       - proxy-network
-
+ 
   nginx:
     image: nginx:alpine
     container_name: proposal-nginx
     ports:
       - "8888:80"
-    #environment:
-      #VIRTUAL_HOST: pe.test2.rid-intrasoft.eu
-      #VIRTUAL_PORT: 8888
-      #LETSENCRYPT_HOST: pe.test2.rid-intrasoft.eu
-      #LETSENCRYPT_EMAIL: aorfanou@netcompany.com
+    environment:
+      VIRTUAL_HOST: pe.test2.rid-intrasoft.eu
+      VIRTUAL_PORT: 80
+      LETSENCRYPT_HOST: pe.test2.rid-intrasoft.eu
+      LETSENCRYPT_EMAIL: aorfanou@netcompany.com
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./web:/usr/share/nginx/html:ro 
+      - ./web:/usr/share/nginx/html:ro
     depends_on:
       - api
     restart: unless-stopped
     networks:
       - proxy-network
-
+ 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.0
     container_name: keycloak
@@ -103,17 +105,15 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: ${KC_HOSTNAME}
-
       PROXY_ADDRESS_FORWARDING: "true"
       JDBC_PARAMS: "ssl=false"
       KC_HOSTNAME_ADMIN_URL: ${KC_HOSTNAME}
       KC_HOSTNAME_URL: ${KC_HOSTNAME}
       KC_HOSTNAME_STRICT: "false"
-      VIRTUAL_HOST: ${KC_HOSTNAME}
-      VIRTUAL_PORT: 8081
-      LETSENCRYPT_HOST: ${KC_HOSTNAME}
+      VIRTUAL_HOST: keycloak.test2.rid-intrasoft.eu
+      VIRTUAL_PORT: 8080
+      LETSENCRYPT_HOST: keycloak.test2.rid-intrasoft.eu
       LETSENCRYPT_EMAIL: aorfanou@netcompany.com
-
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres-db:5432/keycloak
       KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
@@ -126,7 +126,7 @@ services:
       - postgres-db
     networks:
       - proxy-network
-
+ 
   postgres-db:
     image: postgres:16
     environment:
@@ -137,15 +137,15 @@ services:
       - proposal_extractor_postgres_data:/var/lib/postgresql/data
     networks:
       - proxy-network
-
+ 
   redis:
-      image: redis:7-alpine
-      container_name: proposal-redis
-      command: ["redis-server", "--save", "", "--appendonly", "no"]
-      restart: unless-stopped
-      networks:
-        - proxy-network
-
+    image: redis:7-alpine
+    container_name: proposal-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    networks:
+      - proxy-network
+ 
   worker:
     build:
       context: .
@@ -168,14 +168,13 @@ services:
     restart: unless-stopped
     networks:
       - proxy-network
-
-
-
+ 
+ 
 networks:
   proxy-network:
     external: true
-
-
+ 
+ 
 volumes:
   # External volumes — managed outside this compose file.
   # These are the volumes from the original proposal_extractor project,
@@ -183,4 +182,4 @@ volumes:
   # across project renames. Run `docker volume ls` to confirm they exist.
   proposal_extractor_ollama_data:
   proposal_extractor_postgres_data:
-  proposal_uploads: 
+  proposal_uploads:
