@@ -14,8 +14,7 @@ pipeline {
         }
         stage('Build & Push') {
             steps {
-                sh 'docker build -t my-proposal-service:${env.BUILD_ID} .'
-                sh 'docker push my-proposal-service:${env.BUILD_ID}'
+                sh 'docker compose --build'
             }
         }
     }
