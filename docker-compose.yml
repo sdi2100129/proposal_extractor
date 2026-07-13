@@ -146,7 +146,5 @@ volumes:
   # preserved so users, Keycloak config, and the Ollama model survive
   # across project renames. Run `docker volume ls` to confirm they exist.
   proposal_extractor_ollama_data:
-    external: true
   proposal_extractor_postgres_data:
-    external: true
   proposal_uploads: 
