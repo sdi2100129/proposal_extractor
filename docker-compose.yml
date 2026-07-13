@@ -76,12 +76,19 @@ services:
     container_name: proposal-nginx
     ports:
       - "8888:80"
+    environment:
+      - VIRTUAL_HOST= pe.test2.rid-intrasoft.eu
+      - VIRTUAL_PORT= 8888
+      - LETSENCRYPT_HOST= pe.test2.rid-intrasoft.eu
+      - LETSENCRYPT_EMAIL= aorfanou@netcompany.comvalue
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./web:/usr/share/nginx/html:ro 
     depends_on:
       - api
     restart: unless-stopped
+    networks:
+      - "proxy-network"
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.0
@@ -138,6 +145,12 @@ services:
       - ollama
       - redis
     restart: unless-stopped
+
+
+
+networks:
+  proxy-network:
+    external: true
 
 
 volumes:
