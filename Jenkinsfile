@@ -7,6 +7,7 @@ pipeline {
                 withCredentials([file(credentialsId: 'proposal_extractor.env', variable: 'ENV_FILE')]) {
                     sh '''
                         cp "$ENV_FILE" .env
+                        docker compose down --remove-orphans
                         docker compose up --build
                     '''
                 }
