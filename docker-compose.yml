@@ -78,7 +78,7 @@ services:
       - "8888:80"
     environment:
       - VIRTUAL_HOST= pe.test2.rid-intrasoft.eu
-      - VIRTUAL_PORT= 80
+      - VIRTUAL_PORT= 8888
       - LETSENCRYPT_HOST= pe.test2.rid-intrasoft.eu
       - LETSENCRYPT_EMAIL= aorfanou@netcompany.comvalue
     volumes:
