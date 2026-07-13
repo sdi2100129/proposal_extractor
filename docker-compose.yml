@@ -29,6 +29,8 @@ services:
         ollama pull qwen2.5:3b
         echo "done."
     restart: "no"
+    networks:
+      - proxy-network
 
   api:
     build:
@@ -70,6 +72,8 @@ services:
             "gunicorn_conf.py",
           ]
     restart: unless-stopped
+    networks:
+      - proxy-network
 
   nginx:
     image: nginx:alpine
@@ -87,9 +91,8 @@ services:
     depends_on:
       - api
     restart: unless-stopped
-    #networks:
-    #  - default
-    #  - proxy-network
+    networks:
+      - proxy-network
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.0
@@ -122,7 +125,6 @@ services:
     depends_on:
       - postgres-db
     networks:
-      - default
       - proxy-network
 
   postgres-db:
@@ -133,13 +135,17 @@ services:
       POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
     volumes:
       - proposal_extractor_postgres_data:/var/lib/postgresql/data
+    networks:
+      - proxy-network
 
   redis:
       image: redis:7-alpine
       container_name: proposal-redis
       command: ["redis-server", "--save", "", "--appendonly", "no"]
       restart: unless-stopped
-      
+      networks:
+        - proxy-network
+
   worker:
     build:
       context: .
@@ -160,6 +166,8 @@ services:
       - ollama
       - redis
     restart: unless-stopped
+    networks:
+      - proxy-network
 
 
 
