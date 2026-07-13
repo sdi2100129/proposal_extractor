@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Proposal Extractor — console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#F5F6FA; --surface:#FFFFFF; --ink:#14161D; --muted:#5B6172;
+    --line:#E2E5EE; --line-strong:#C9CEDC;
+    --eu:#1F3D8A; --eu-bright:#3457D5; --eu-soft:#EAEEFB;
+    --signal:#F2B705; --ok:#0E8A5F; --ok-soft:#E4F3EC;
+    --warn:#B7791F; --warn-soft:#FBF1DD; --err:#C0362C; --err-soft:#FBE9E7;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --r:10px; --sidebar:248px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0; height:100%}
+  body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased}
+  .mono{font-family:var(--mono)}
+  a{color:var(--eu-bright)}
+  button{font-family:inherit}
+
+  /* Header */
+  header.bar{
+    position:sticky; top:0; z-index:30; background:rgba(245,246,250,.88);
+    backdrop-filter:saturate(1.4) blur(8px); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:14px; padding:11px 20px;
+  }
+  .wordmark{display:flex; align-items:center; gap:11px; font-weight:600; letter-spacing:-.01em}
+  .glyph{width:26px; height:26px; border-radius:6px; flex:none; background:var(--eu); position:relative}
+  .glyph::before{content:"";position:absolute; left:7px; top:6px; width:3px; height:14px; background:var(--signal); box-shadow:5px 0 0 var(--signal),10px 0 0 var(--signal)}
+  .wordmark small{display:block; font-weight:400; font-size:11px; color:var(--muted); letter-spacing:.02em; margin-top:-2px}
+  .bar .spacer{flex:1}
+  .pill{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-family:var(--mono); padding:5px 11px; border-radius:999px; border:1px solid var(--line-strong); background:var(--surface); color:var(--muted); cursor:pointer}
+  .pill .dot{width:8px; height:8px; border-radius:50%; background:var(--line-strong); flex:none}
+  .pill.on{border-color:var(--ok); color:var(--ok)} .pill.on .dot{background:var(--ok)}
+  .pill.bad{border-color:var(--err); color:var(--err)} .pill.bad .dot{background:var(--err)}
+
+  /* App shell */
+  .app{display:grid; grid-template-columns:var(--sidebar) 1fr; min-height:calc(100vh - 49px)}
+  aside.sidebar{border-right:1px solid var(--line); padding:18px 12px; background:var(--surface)}
+  .navgroup{margin-bottom:18px}
+  .navgroup h3{font-size:10.5px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin:0 0 7px 10px; font-weight:600}
+  .navitem{
+    display:flex; align-items:center; gap:9px; width:100%; text-align:left;
+    background:none; border:0; border-radius:8px; padding:8px 10px; cursor:pointer;
+    color:var(--ink); font-size:14px; font-weight:500;
+  }
+  .navitem:hover{background:var(--paper)}
+  .navitem.active{background:var(--eu-soft); color:var(--eu)}
+  .navitem .star{color:var(--signal); font-size:12px}
+  .navitem .marker{width:3px; height:15px; border-radius:2px; background:transparent; flex:none; margin-left:-4px}
+  .navitem.active .marker{background:var(--eu)}
+
+  main.work{padding:26px 30px 90px; max-width:1040px}
+  .op-head{margin-bottom:20px}
+  .op-head h1{font-size:23px; letter-spacing:-.015em; margin:0 0 5px; font-weight:700}
+  .op-head p{margin:0; color:var(--muted); max-width:64ch}
+  .op-head .ep{font-family:var(--mono); font-size:12px; color:var(--eu); background:var(--eu-soft); padding:2px 8px; border-radius:5px; display:inline-block; margin-top:9px}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:20px}
+  .card + .card{margin-top:16px}
+  .card h2{font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 15px; font-weight:600}
+
+  .grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px}
+  .field{display:flex; flex-direction:column; gap:5px}
+  .field label{font-size:12px; color:var(--muted); font-weight:500}
+  .field .hint{font-size:11.5px; color:var(--muted)}
+  input[type=text],input[type=date],input[type=url],textarea{
+    font-family:var(--mono); font-size:13.5px; color:var(--ink); background:var(--surface);
+    border:1px solid var(--line-strong); border-radius:8px; padding:9px 11px; width:100%;
+  }
+  textarea{resize:vertical; min-height:60px; line-height:1.45}
+  input:focus,textarea:focus{outline:2px solid var(--eu-soft); border-color:var(--eu-bright)}
+  .span2{grid-column:1 / -1}
+
+  .btn{font-size:14px; font-weight:600; border-radius:8px; padding:10px 16px; border:1px solid transparent; cursor:pointer; transition:filter .12s,background .12s,border-color .12s}
+  .btn.primary{background:var(--eu); color:#fff} .btn.primary:hover{filter:brightness(1.08)}
+  .btn.warn{background:var(--warn); color:#fff} .btn.warn:hover{filter:brightness(1.06)}
+  .btn.ghost{background:var(--surface); border-color:var(--line-strong); color:var(--ink)} .btn.ghost:hover{border-color:var(--eu-bright); color:var(--eu-bright)}
+  .btn:disabled{opacity:.5; cursor:not-allowed; filter:none}
+  .btn.sm{padding:6px 11px; font-size:12.5px}
+
+  .drop{border:1.5px dashed var(--line-strong); border-radius:var(--r); padding:22px; text-align:center; color:var(--muted); cursor:pointer; transition:border-color .12s,background .12s}
+  .drop:hover,.drop.hot{border-color:var(--eu-bright); background:var(--eu-soft)}
+  .drop strong{color:var(--ink); font-weight:600}
+  .drop .file{margin-top:7px; font-family:var(--mono); font-size:13px; color:var(--eu)}
+
+  .runrow{display:flex; gap:14px; align-items:flex-end; margin-top:16px; flex-wrap:wrap}
+  .runrow .field{flex:1; min-width:150px}
+  .runbtns{display:flex; gap:10px; flex-wrap:wrap}
+
+  /* Pipeline rail */
+  .rail-wrap{display:none; margin-top:16px} .rail-wrap.show{display:block}
+  .rail{display:flex; gap:10px; margin:4px 0 14px}
+  .seg{flex:1; min-width:0}
+  .seg .track{height:6px; border-radius:3px; background:var(--line); overflow:hidden; position:relative}
+  .seg .fill{height:100%; width:0%; background:var(--line-strong); transition:width .4s ease}
+  .seg.active .fill{background:var(--signal)}
+  .seg.active .track{box-shadow:0 0 0 2px rgba(242,183,5,.18)}
+  .seg.done .fill{width:100% !important; background:var(--ok)}
+  .seg.err .fill{width:100% !important; background:var(--err)}
+  .seg .lab{display:flex; justify-content:space-between; margin-top:8px; font-size:11.5px; font-family:var(--mono); color:var(--muted)}
+  .seg.active .lab .n{color:var(--warn)} .seg.done .lab .n{color:var(--ok)} .seg.err .lab .n{color:var(--err)}
+  @media (prefers-reduced-motion:no-preference){
+    .seg.active .track::after{content:""; position:absolute; inset:0; border-radius:3px; animation:pulse 1.3s ease-in-out infinite; background:rgba(242,183,5,.25)}
+    @keyframes pulse{0%,100%{opacity:0}50%{opacity:1}}
+  }
+  .logline{font-family:var(--mono); font-size:12.5px; color:var(--muted); background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:9px 12px; display:flex; gap:10px; align-items:baseline}
+  .logline .pct{color:var(--eu); font-weight:600; flex:none}
+  .logline .jid{margin-left:auto; color:var(--line-strong)}
+
+  /* Results */
+  .results{display:none; margin-top:16px} .results.show{display:block}
+  .summary{display:flex; gap:24px; flex-wrap:wrap; margin-bottom:16px}
+  .stat .k{font-family:var(--mono); font-size:23px; font-weight:600; line-height:1}
+  .stat .v{font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-top:5px}
+  .toolbar{display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap}
+
+  .id{font-family:var(--mono); font-weight:600; font-size:13px; color:var(--eu); flex:none}
+  .tag{font-family:var(--mono); font-size:11px; padding:2px 7px; border-radius:5px; border:1px solid var(--line-strong); color:var(--muted); white-space:nowrap}
+  .tag.lead{background:var(--ok-soft); border-color:var(--ok); color:var(--ok)}
+  .tag.part{background:var(--paper)}
+  .tag.eu{background:var(--eu-soft); border-color:var(--eu-bright); color:var(--eu)}
+  .untitled{color:var(--muted)}
+
+  .wp{border:1px solid var(--line); border-radius:var(--r); margin-bottom:12px; overflow:hidden; background:var(--surface)}
+  .wp > .head{width:100%; text-align:left; background:none; border:0; cursor:pointer; display:flex; align-items:center; gap:12px; padding:14px 16px}
+  .wp > .head:hover{background:var(--paper)}
+  .wp > .head .caret{font-size:11px; color:var(--muted); transition:transform .15s; flex:none}
+  .wp[open-state="1"] > .head .caret{transform:rotate(90deg)}
+  .wp .title{font-weight:600; flex:1; min-width:0}
+  .meta{display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-family:var(--mono); font-size:12px; color:var(--muted)}
+  .body{display:none; padding:4px 16px 16px} .wp[open-state="1"] .body{display:block}
+  .task{border-top:1px solid var(--line); padding:13px 0} .task:first-child{border-top:0}
+  .task .trow{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .task .desc{color:var(--muted); font-size:13.5px; margin:8px 0 0}
+  .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+  .delivs{margin-top:10px; padding-left:12px; border-left:2px solid var(--line)}
+  .deliv{display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; padding:4px 0}
+
+  /* Tables */
+  table.tbl{width:100%; border-collapse:collapse; font-size:13.5px}
+  table.tbl th,table.tbl td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top}
+  table.tbl th{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600}
+  table.tbl td.num,table.tbl th.num{text-align:right; font-family:var(--mono)}
+  table.tbl tr:hover td{background:var(--paper)}
+  .scroll{overflow-x:auto}
+
+  .note{border-radius:8px; padding:11px 13px; font-size:13.5px; margin-bottom:12px}
+  .note.warn{background:var(--warn-soft); border:1px solid var(--warn); color:var(--warn)}
+  .note.ok{background:var(--ok-soft); border:1px solid var(--ok); color:var(--ok)}
+  .note b{color:inherit}
+
+  .empty{padding:20px; text-align:center; color:var(--muted)}
+  .err-box{padding:18px; background:var(--err-soft); border:1px solid var(--err); border-radius:var(--r); color:var(--err); font-size:14px}
+  .err-box b{color:var(--err)}
+
+  pre.raw{display:none; background:#0E1018; color:#D6DBEA; border-radius:var(--r); padding:16px; overflow:auto; font-family:var(--mono); font-size:12.5px; line-height:1.55; max-height:520px; margin:0}
+  pre.raw.show{display:block}
+
+  /* views */
+  .view{display:none} .view.show{display:block}
+
+  /* modal */
+  .modal-bg{position:fixed; inset:0; background:rgba(20,22,29,.45); display:none; align-items:center; justify-content:center; z-index:40; padding:20px}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--surface); border-radius:var(--r); max-width:460px; width:100%; padding:22px; border:1px solid var(--line)}
+  .modal h3{margin:0 0 8px; font-size:18px}
+  .modal p{margin:0 0 14px; color:var(--muted)}
+  .modal .kv{font-family:var(--mono); font-size:13px; background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:11px 13px; margin-bottom:16px}
+  .modal .kv div{display:flex; justify-content:space-between; gap:12px; padding:2px 0}
+  .modal .kv span:first-child{color:var(--muted)}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end}
+
+  .toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:11px 18px; border-radius:8px; font-size:13.5px; opacity:0; pointer-events:none; transition:opacity .2s,transform .2s; z-index:50; max-width:90vw}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:820px){
+    .app{grid-template-columns:1fr}
+    aside.sidebar{border-right:0; border-bottom:1px solid var(--line); display:flex; gap:18px; overflow-x:auto; padding:12px}
+    .navgroup{margin:0; flex:none} .navgroup h3{margin-left:4px}
+    main.work{padding:20px 16px 80px}
+    .grid{grid-template-columns:1fr}
+    .rail{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="wordmark">
+    <span class="glyph" aria-hidden="true"></span>
+    <span>Proposal Extractor<small>Horizon Europe · extraction console</small></span>
+  </div>
+  <span class="spacer"></span>
+  <button class="pill" id="healthPill" title="Service health"><span class="dot"></span><span id="healthLabel">checking…</span></button>
+  <button class="pill" id="authPill" title="Authentication"><span class="dot"></span><span id="authLabel">Not signed in</span></button>
+</header>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="work">
+    <!-- RUN VIEW (pipeline + export operations) -->
+    <section class="view" id="view-run">
+      <div class="op-head">
+        <h1 id="opTitle"></h1>
+        <p id="opDesc"></p>
+        <span class="ep" id="opEp"></span>
+      </div>
+
+      <div class="card">
+        <h2>Input</h2>
+        <div class="drop" id="drop">
+          <strong>Drop a proposal PDF here</strong> or click to choose
+          <div class="file" id="fileName"></div>
+          <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden />
+        </div>
+        <div class="runrow">
+          <div class="field"><label for="company">Company acronym</label><input type="text" id="company" placeholder="INTRA" /></div>
+          <div class="field"><label for="startDate">Proposal start date</label><input type="date" id="startDate" /></div>
+        </div>
+        <div class="grid" id="extraFields" style="margin-top:14px; display:none"></div>
+        <div class="runbtns" style="margin-top:18px"><button class="btn primary" id="runBtn">Run</button></div>
+      </div>
+
+      <div class="card rail-wrap" id="railWrap">
+        <h2>Pipeline</h2>
+        <div class="rail" id="rail">
+          <div class="seg" data-stage="stage_1_tables"><div class="track"><div class="fill"></div></div><div class="lab"><span>Tables</span><span class="n">·</span></div></div>
+          <div class="seg" data-stage="stage_2_tasks"><div class="track"><div class="fill"></div></div><div class="lab"><span>Tasks</span><span class="n">·</span></div></div>
+          <div class="seg" data-stage="stage_3_assembly"><div class="track"><div class="fill"></div></div><div class="lab"><span>Assembly</span><span class="n">·</span></div></div>
+        </div>
+        <div class="logline"><span class="pct" id="logPct">0%</span><span id="logMsg">Waiting…</span><span class="jid mono" id="logJid"></span></div>
+      </div>
+
+      <div class="results" id="results">
+        <div class="summary" id="summary"></div>
+        <div class="toolbar">
+          <button class="btn ghost sm" id="rawBtn">Show raw JSON</button>
+          <button class="btn ghost sm" id="dlBtn">Download JSON</button>
+        </div>
+        <div id="render"></div>
+        <pre class="raw" id="raw"></pre>
+      </div>
+    </section>
+
+    <!-- HEALTH VIEW -->
+    <section class="view" id="view-health">
+      <div class="op-head"><h1>Health</h1><p>Liveness of the API behind the gateway.</p><span class="ep">GET /health</span></div>
+      <div class="card"><div id="healthBody" class="empty">Checking…</div>
+        <div class="runbtns" style="margin-top:14px"><button class="btn ghost sm" id="healthBtn">Check again</button></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS VIEW -->
+    <section class="view" id="view-settings">
+      <div class="op-head"><h1>Settings</h1><p>Where the console reaches the backend, and how it signs in. Stored in this browser tab only.</p></div>
+      <div class="card">
+        <h2>Backend</h2>
+        <div class="grid">
+          <div class="field span2">
+            <label for="apiBase">API base URL</label>
+            <input type="url" id="apiBase" placeholder="leave empty for same origin" />
+            <span class="hint">Empty = same origin (recommended behind nginx). Otherwise e.g. <span class="mono">http://localhost</span>.</span>
+          </div>
+        </div>
+        <h2 style="margin-top:20px">Keycloak (OIDC)</h2>
+        <div class="grid">
+          <div class="field"><label for="kcUrl">Keycloak base URL</label><input type="url" id="kcUrl" placeholder="http://localhost:8081" /></div>
+          <div class="field"><label for="kcRealm">Realm</label><input type="text" id="kcRealm" placeholder="proposal" /></div>
+          <div class="field"><label for="kcClient">Client ID (public)</label><input type="text" id="kcClient" placeholder="swagger-ui" /></div>
+          <div class="field"><label>Redirect URI (register on the client)</label><input type="text" id="redirectUri" readonly /></div>
+        </div>
+        <div class="runbtns" style="margin-top:14px">
+          <button class="btn primary sm" id="signinBtn">Sign in with Keycloak</button>
+          <button class="btn ghost sm" id="signoutBtn">Sign out</button>
+        </div>
+        <h2 style="margin-top:20px">Or paste a token</h2>
+        <div class="field span2"><label for="manualToken">Bearer access token</label><textarea id="manualToken" placeholder="Paste a JWT to skip the login redirect"></textarea></div>
+        <div class="runbtns" style="margin-top:10px"><button class="btn ghost sm" id="useTokenBtn">Use this token</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- confirm modal for side-effecting ops -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle">Confirm</h3>
+    <p id="modalText"></p>
+    <div class="kv" id="modalKv"></div>
+    <div class="modal-actions">
+      <button class="btn ghost sm" id="modalCancel">Cancel</button>
+      <button class="btn warn sm" id="modalOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const mem = {};
+  let pipelineStartTime = 0;
+
+  const store = {
+    get(k){ try { return sessionStorage.getItem(k); } catch { return mem[k] ?? null; } },
+    set(k,v){ try { sessionStorage.setItem(k,v); } catch { mem[k]=v; } },
+    del(k){ try { sessionStorage.removeItem(k); } catch { delete mem[k]; } },
+  };
+  const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
+  const esc = s => String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const months = (a,b) => (a||b) ? `${a||"M?"}–${b||"M?"}` : "";
+
+  // ---------- config & auth ----------
+  const CFG = {
+    apiBase: store.get("cfg.apiBase") ?? "",
+    kcUrl:   store.get("cfg.kcUrl")   ?? "http://localhost:8081",
+    kcRealm: store.get("cfg.kcRealm") ?? "proposal",
+    kcClient:store.get("cfg.kcClient")?? "swagger-ui",
+    company: store.get("cfg.company") ?? "INTRA",
+  };
+  let token = store.get("auth.token") || "";
+  const redirectUri = location.origin + location.pathname;
+  const apiUrl = p => (CFG.apiBase || "") + p;
+
+  function saveCfg(){
+    CFG.apiBase=$("apiBase").value.trim().replace(/\/+$/,"");
+    CFG.kcUrl=$("kcUrl").value.trim().replace(/\/+$/,"");
+    CFG.kcRealm=$("kcRealm").value.trim();
+    CFG.kcClient=$("kcClient").value.trim();
+    CFG.company=$("company").value.trim()||"INTRA";
+    for (const [k,v] of Object.entries(CFG)) store.set("cfg."+k,v);
+  }
+  function jwtExp(t){ try { return JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).exp*1000; } catch { return null; } }
+  function setAuth(t){
+    token=t||""; if(token) store.set("auth.token",token); else store.del("auth.token");
+    const pill=$("authPill"), lab=$("authLabel");
+    if(!token){ pill.className="pill"; lab.textContent="Not signed in"; return; }
+    const exp=jwtExp(token);
+    if(exp && exp<Date.now()){ pill.className="pill bad"; lab.textContent="Token expired"; return; }
+    pill.className="pill on"; lab.textContent=exp?("exp "+new Date(exp).toLocaleTimeString()):"Token set";
+  }
+
+  const b64url = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  const rand = (n=64)=>{ const a=new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); };
+  const sha256 = s => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+
+  async function signIn(){
+    saveCfg();
+    if(!CFG.kcUrl||!CFG.kcRealm||!CFG.kcClient){ toast("Fill in the Keycloak settings first"); return; }
+    const verifier=rand(), challenge=b64url(await sha256(verifier)), state=rand(16);
+    store.set("pkce.verifier",verifier); store.set("pkce.state",state);
+    const q=new URLSearchParams({client_id:CFG.kcClient, redirect_uri:redirectUri, response_type:"code", scope:"openid", state, code_challenge:challenge, code_challenge_method:"S256"});
+    location.assign(`${CFG.kcUrl}/realms/${encodeURIComponent(CFG.kcRealm)}/protocol/openid-connect/auth?${q}`);
+  }
+  async function handleCallback(){
+    const p=new URLSearchParams(location.search), code=p.get("code");
+    if(!code){ if(p.get("error")) toast("Sign-in failed: "+p.get("error")); return; }
+    const expState=store.get("pkce.state"), verifier=store.get("pkce.verifier");
+    history.replaceState({},"",redirectUri);
+    if(!verifier || p.get("state")!==expState){ toast("Sign-in state mismatch — try again"); return; }
+    try{
+      const res=await fetch(`${CFG.kcUrl}/realms/${encodeURIComponent(CFG.kcRealm)}/protocol/openid-connect/token`,{
+        method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
+        body:new URLSearchParams({grant_type:"authorization_code", code, redirect_uri:redirectUri, client_id:CFG.kcClient, code_verifier:verifier}),
+      });
+      if(!res.ok) throw new Error(await res.text());
+      setAuth((await res.json()).access_token); toast("Signed in");
+    }catch(e){ toast("Token exchange failed — check client config"); console.error(e); }
+    finally{ store.del("pkce.verifier"); store.del("pkce.state"); }
+  }
+
+  class ApiError extends Error{ constructor(s,m){ super(m); this.status=s; } }
+  async function api(path,opts={}){
+    const headers=Object.assign({},opts.headers||{});
+    if(token) headers["Authorization"]="Bearer "+token;
+    const res=await fetch(apiUrl(path),Object.assign({},opts,{headers}));
+    if(res.status===401) throw new ApiError(401,"Not authorized — sign in or paste a valid token (Settings).");
+    return res;
+  }
+  async function detail(res){ try{ const j=await res.json(); return typeof j.detail==="string"?j.detail:JSON.stringify(j.detail); }catch{ return `HTTP ${res.status}`; } }
+
+  // ---------- operations registry ----------
+  const OPS = {
+    extract:        { group:"Pipeline", label:"Extract", star:true, title:"Extract work packages", ep:"POST /api/v1/extractions/work-packages", desc:"Queue an extraction job and stream staged progress live. Best for large PDFs.", kind:"async", render:"wps", runLabel:"Run extraction" },
+    full:           { group:"Pipeline", label:"Full run", title:"Full pipeline (synchronous)", ep:"POST /api/v1/proposal", desc:"Run all three stages in one request and return the assembled work packages. Holds the connection open for the whole run.", endpoint:"/api/v1/proposal", render:"wps", runLabel:"Run pipeline" },
+    tables:         { group:"Pipeline", label:"Tables", title:"Stage 1 · table extraction", ep:"POST /api/v1/proposal/tables", desc:"Parse the Section 3 tables only — WP list, effort, and deliverables. Fast, no LLM.", endpoint:"/api/v1/proposal/tables", render:"tables", runLabel:"Parse tables" },
+    tasks:          { group:"Pipeline", label:"Tasks", title:"Stage 2 · task extraction", ep:"POST /api/v1/proposal/tasks", desc:"Extract tasks from each WP's prose via the LLM only. Slower; depends on Ollama.", endpoint:"/api/v1/proposal/tasks", render:"tasks", runLabel:"Extract tasks" },
+    tasks_v2:       { group:"Regex (v2)", label:"Tasks (regex)", title:"Stage 2 · deterministic task extraction", ep:"POST /api/v2/proposal/tasks", desc:"Extract tasks from each WP's prose with the regex extractor — no LLM, deterministic and fast.", endpoint:"/api/v2/proposal/tasks", render:"tasks", runLabel:"Extract tasks" },
+    full_v2:        { group:"Regex (v2)", label:"Full run (regex)", title:"Full pipeline · regex Stage 2 (synchronous)", ep:"POST /api/v2/proposal", desc:"Run all three stages with the deterministic regex task extractor. Holds the connection open for the whole run.", endpoint:"/api/v2/proposal", render:"wps", runLabel:"Run pipeline" },
+    extract_v2:     { group:"Regex (v2)", label:"Extract (regex)", star:true, title:"Extract work packages · regex (async + SSE)", ep:"POST /api/v2/extractions/work-packages", desc:"Queue a regex-based extraction job and stream staged progress live. No LLM.", kind:"async", createPath:"/api/v2/extractions/work-packages", render:"wps", runLabel:"Run extraction" },
+    planner_payload:{ group:"Export", label:"Planner preview", title:"Microsoft Planner · payload preview", ep:"POST /api/v1/proposal/planner-payload", desc:"Build the Planner payload from the proposal without sending anything to Microsoft.", endpoint:"/api/v1/proposal/planner-payload", render:"planner_payload", runLabel:"Build payload" },
+    planner_push:   { group:"Export", label:"Planner push", title:"Microsoft Planner · create plan", ep:"POST /api/v1/proposal/planner", desc:"Create a new plan in Microsoft Planner. This writes to your Microsoft 365 tenant.", endpoint:"/api/v1/proposal/planner", render:"planner_push", runLabel:"Push to Planner", sideEffect:true,
+                      fields:[{name:"owner_group_id", label:"Owner group ID", placeholder:"Microsoft 365 group GUID", required:true}, {name:"plan_title", label:"Plan title", placeholder:"Proposal Plan"}] },
+    github_payload: { group:"Export", label:"GitHub preview", title:"GitHub Issues · payload preview", ep:"POST /api/v1/proposal/github-payload", desc:"Build the milestones, labels, and issues payload from the proposal without creating anything on GitHub.", endpoint:"/api/v1/proposal/github-payload", render:"github_payload", runLabel:"Build payload",
+                      fields:[{name:"owner", label:"Repository owner", placeholder:"org-or-user", required:true}, {name:"repo", label:"Repository", placeholder:"repo-name", required:true}, {name:"plan_title", label:"Proposal title", placeholder:"Proposal Plan"}] },
+    github_push:    { group:"Export", label:"GitHub push", title:"GitHub Issues · create", ep:"POST /api/v1/proposal/github", desc:"Create milestones, labels, and issues in a GitHub repository. Idempotent — existing items are reused, not duplicated.", endpoint:"/api/v1/proposal/github", render:"github_push", runLabel:"Push to GitHub", sideEffect:true,
+                      fields:[{name:"owner", label:"Repository owner", placeholder:"org-or-user", required:true}, {name:"repo", label:"Repository", placeholder:"repo-name", required:true}, {name:"plan_title", label:"Proposal title", placeholder:"Proposal Plan"}] },
+    health:         { group:"System", label:"Health", view:"health" },
+    settings:       { group:"System", label:"Settings", view:"settings" },
+  };
+  let activeOp = "extract";
+
+  function buildSidebar(){
+    const groups={};
+    for(const [key,op] of Object.entries(OPS)){ (groups[op.group] ||= []).push([key,op]); }
+    const order=["Pipeline","Regex (v2)","Export","System"];
+    $("sidebar").innerHTML = order.map(g=>`
+      <div class="navgroup"><h3>${g}</h3>${
+        groups[g].map(([key,op])=>`
+          <button class="navitem${key===activeOp?" active":""}" data-op="${key}">
+            <span class="marker"></span>${esc(op.label)}${op.star?'<span class="star">★</span>':""}
+          </button>`).join("")
+      }</div>`).join("");
+    $("sidebar").querySelectorAll(".navitem").forEach(b=>b.addEventListener("click",()=>selectOp(b.dataset.op)));
+  }
+
+  function selectOp(key){
+    activeOp=key; buildSidebar();
+    const op=OPS[key];
+    ["view-run","view-health","view-settings"].forEach(v=>$(v).classList.remove("show"));
+    if(op.view==="health"){ $("view-health").classList.add("show"); checkHealth(); return; }
+    if(op.view==="settings"){ $("view-settings").classList.add("show"); return; }
+    // run view
+    $("view-run").classList.add("show");
+    $("opTitle").textContent=op.title; $("opDesc").textContent=op.desc; $("opEp").textContent=op.ep;
+    $("runBtn").textContent=op.runLabel||"Run";
+    $("runBtn").className = "btn "+(op.sideEffect?"warn":"primary");
+    // extra fields
+    const ef=$("extraFields");
+    if(op.fields){ ef.style.display="grid"; ef.innerHTML=op.fields.map(f=>`
+      <div class="field"><label for="f_${f.name}">${esc(f.label)}${f.required?" *":""}</label>
+      <input type="text" id="f_${f.name}" placeholder="${esc(f.placeholder||"")}" /></div>`).join(""); }
+    else { ef.style.display="none"; ef.innerHTML=""; }
+    // reset output area
+    $("railWrap").classList.remove("show");
+    $("results").classList.remove("show"); $("raw").classList.remove("show"); $("rawBtn").textContent="Show raw JSON";
+    $("render").innerHTML="";
+  }
+
+  // ---------- shared input ----------
+  let selectedFile=null;
+  function setFile(f){
+    if(!f) return;
+    if(!/\.pdf$/i.test(f.name) && f.type!=="application/pdf"){ toast("That doesn't look like a PDF"); return; }
+    selectedFile=f; $("fileName").textContent=`${f.name}  (${Math.round(f.size/1024)} KB)`;
+  }
+  function buildForm(op){
+    const fd=new FormData();
+    fd.append("pdf",selectedFile);
+    fd.append("company",$("company").value.trim()||"INTRA");
+    fd.append("start_date",$("startDate").value||"2025-01-01");
+    if(op.fields) for(const f of op.fields){ const v=($("f_"+f.name)?.value||"").trim(); if(v) fd.append(f.name,v); }
+    return fd;
+  }
+
+  // ---------- run dispatch ----------
+  let running=false;
+  async function run(){
+    if(running) return;
+    const op=OPS[activeOp];
+    if(!selectedFile){ toast("Choose a PDF first"); return; }
+    if(!token){ toast("Sign in or paste a token first"); selectOp("settings"); return; }
+    if(op.fields){ for(const f of op.fields){ if(f.required && !($("f_"+f.name)?.value||"").trim()){ toast(`${f.label} is required`); return; } } }
+    saveCfg();
+
+    if(op.sideEffect){ confirmPush(op); return; }
+    await execute(op);
+  }
+
+  async function execute(op){
+    pipelineStartTime = performance.now();
+    running=true; $("runBtn").disabled=true;
+    $("results").classList.remove("show"); $("raw").classList.remove("show"); $("rawBtn").textContent="Show raw JSON"; $("render").innerHTML="";
+    if(op.kind==="async") $("railWrap").classList.add("show"); else $("railWrap").classList.remove("show");
+    railReset();
+    try{
+      if(op.kind==="async"){ await runAsync(op); }
+      else{
+        const res=await api(op.endpoint,{method:"POST",body:buildForm(op)});
+        if(!res.ok) throw new ApiError(res.status, await detail(res));
+        present(await res.json(), op.render);
+      }
+    }catch(e){ if(op.kind==="async") railFail(e.message); showError(e); }
+    finally{ running=false; $("runBtn").disabled=false; }
+  }
+
+  // async job flow
+  async function runAsync(op){
+    const createPath = op.createPath || "/api/v1/extractions/work-packages";
+    const res=await api(createPath,{method:"POST",body:buildForm(op)});
+    if(res.status!==202) throw new ApiError(res.status, await detail(res));
+    const job=await res.json(); $("logJid").textContent="job "+job.job_id;
+    try{ await streamSSE(job.job_id); }
+    catch(e){ console.warn("SSE failed, polling:",e); await poll(job.job_id); }
+  }
+  async function streamSSE(jobId){
+    const res=await api(`/api/v1/extractions/${jobId}/events`,{headers:{Accept:"text/event-stream"}});
+    if(!res.ok||!res.body) throw new Error("no stream");
+    const reader=res.body.getReader(), dec=new TextDecoder(); let buf="";
+    while(true){
+      const {value,done}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true}); let i;
+      while((i=buf.indexOf("\n\n"))>=0){
+        const evt=parseFrame(buf.slice(0,i)); buf=buf.slice(i+2); if(!evt) continue;
+        if(evt.event==="progress") railUpdate(evt.data);
+        else if(evt.event==="completed"){ railDone(); await loadResult(evt.data.result_url||`/api/v1/extractions/${jobId}/result`); return; }
+        else if(evt.event==="failed"){ railFail(evt.data.error); showError(new Error(evt.data.error||"Extraction failed")); return; }
+        else if(evt.event==="error") throw new Error(evt.data.detail||"stream error");
+      }
+    }
+  }
+  function parseFrame(frame){
+    let event="message", data="";
+    for(const line of frame.split("\n")){
+      if(line.startsWith(":")) continue;
+      if(line.startsWith("event:")) event=line.slice(6).trim();
+      else if(line.startsWith("data:")) data+=line.slice(5).trim();
+    }
+    if(!data) return null;
+    try{ return {event, data:JSON.parse(data)}; }catch{ return null; }
+  }
+  async function poll(jobId){
+    while(true){
+      const res=await api(`/api/v1/extractions/${jobId}`); if(!res.ok) throw new ApiError(res.status, await detail(res));
+      const s=await res.json(); railUpdate({stage:s.stage,message:s.message,percent:s.percent});
+      if(s.status==="completed"){ railDone(); await loadResult(s.result_url||`/api/v1/extractions/${jobId}/result`); return; }
+      if(s.status==="failed"){ railFail(s.error); showError(new Error(s.error||"Extraction failed")); return; }
+      await new Promise(r=>setTimeout(r,1500));
+    }
+  }
+  async function loadResult(url){ const res=await api(url); if(!res.ok) throw new ApiError(res.status, await detail(res)); present(await res.json(),"wps"); }
+
+  // ---------- rail ----------
+  const STAGES=["stage_1_tables","stage_2_tasks","stage_3_assembly"];
+  function railReset(){ document.querySelectorAll(".seg").forEach(s=>{ s.className="seg"; s.querySelector(".fill").style.width="0%"; s.querySelector(".n").textContent="·"; }); $("logPct").textContent="0%"; $("logMsg").textContent="Queued…"; $("logJid").textContent=""; }
+  function railUpdate({stage,message,percent}){
+    const idx=STAGES.indexOf(stage);
+    document.querySelectorAll(".seg").forEach((s,i)=>{
+      s.classList.remove("active");
+      if(idx<0) return;
+      if(i<idx){ s.classList.add("done"); s.querySelector(".n").textContent="done"; }
+      else if(i===idx){ s.classList.add("active"); s.classList.remove("done");
+        s.querySelector(".fill").style.width=Math.max(0,Math.min(100,railPct(stage,percent)))+"%";
+        s.querySelector(".n").textContent=(percent??"")+"%"; }
+    });
+    if(percent!=null) $("logPct").textContent=percent+"%";
+    if(message) $("logMsg").textContent=message;
+  }
+  function railPct(stage,pct){ if(pct==null) return 50; if(stage==="stage_1_tables") return Math.min(100,pct*10); if(stage==="stage_2_tasks") return ((pct-40)/45)*100; if(stage==="stage_3_assembly") return Math.min(100,(pct-85)/5*100); return 50; }
+  function railDone(){ document.querySelectorAll(".seg").forEach(s=>{ s.className="seg done"; s.querySelector(".fill").style.width="100%"; s.querySelector(".n").textContent="done"; }); $("logPct").textContent="100%"; $("logMsg").textContent="Extraction complete."; }
+  function railFail(msg){ let a=document.querySelector(".seg.active")||document.querySelector(".seg:not(.done)"); if(a){ a.className="seg err"; a.querySelector(".n").textContent="failed"; } $("logMsg").textContent=msg||"Failed."; }
+
+  // ---------- side-effect confirm ----------
+  let pendingOp=null;
+  function confirmPush(op){
+    pendingOp=op;
+    let title, text, rows;
+    if(activeOp==="github_push"){
+      title="Create issues on GitHub?";
+      text="This creates milestones, labels, and issues in the repository. Re-running is idempotent — existing items are reused rather than duplicated.";
+      rows=[
+        ["Repository", `${$("f_owner")?.value||"?"}/${$("f_repo")?.value||"?"}`],
+        ["Proposal title", ($("f_plan_title")?.value||"Proposal Plan")],
+        ["Company", ($("company").value||"INTRA")],
+        ["PDF", selectedFile?selectedFile.name:"—"],
+      ];
+    } else {
+      title="Create a Planner plan?";
+      text="This sends data to Microsoft Graph and creates a new plan in your tenant. It can't be undone from here.";
+      rows=[
+        ["Plan title", ($("f_plan_title")?.value||"Proposal Plan")],
+        ["Owner group", ($("f_owner_group_id")?.value||"—")],
+        ["Company", ($("company").value||"INTRA")],
+        ["PDF", selectedFile?selectedFile.name:"—"],
+      ];
+    }
+    $("modalTitle").textContent=title;
+    $("modalText").textContent=text;
+    $("modalKv").innerHTML=rows.map(([k,v])=>`<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
+    $("modalBg").classList.add("show");
+  }
+  function closeModal(){ $("modalBg").classList.remove("show"); pendingOp=null; }
+
+  // ---------- results presentation ----------
+  let lastData=null, lastName="export";
+  function present(data, kind){
+    const duration = pipelineStartTime ? ((performance.now() - pipelineStartTime) / 1000).toFixed(2) + "s" : null;
+    lastData=data; lastName=(data && (data.company||"export"));
+    const R=$("render");
+    if(kind==="wps") R.innerHTML=renderWPs(data);
+    else if(kind==="tables") R.innerHTML=renderTables(data);
+    else if(kind==="tasks") R.innerHTML=renderTasks(data);
+    else if(kind==="planner_payload") R.innerHTML=renderPlannerPayload(data);
+    else if(kind==="planner_push") R.innerHTML=renderPlannerPush(data);
+    else if(kind==="github_payload") R.innerHTML=renderGithubPayload(data);
+    else if(kind==="github_push") R.innerHTML=renderGithubPush(data);
+    wireAccordions();
+    $("summary").innerHTML=summaryFor(kind,data, duration);
+    $("raw").textContent=JSON.stringify(data,null,2);
+    $("results").classList.add("show");
+    $("results").scrollIntoView({behavior:"smooth",block:"nearest"});
+  }
+  const stat=(k,v)=>`<div class="stat"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`;
+  function summaryFor(kind,d, duration){
+    let res = "";
+    if(kind==="wps"||kind==="planner_payload"){ const w=d.work_packages||[]; const t=w.reduce((n,x)=>n+(x.tasks?.length||0),0); const dl=w.reduce((n,x)=>n+(x.tasks?.reduce((m,y)=>m+(y.deliverables?.length||0),0)||0),0); res = [stat(w.length,"work packages"),stat(t,"tasks"),stat(dl,"deliverables"),stat(d.company,"company"),stat(d.start_date,"start date")].join(""); }
+    else if(kind==="tables"){ const r=d.result||{}; res = [stat(Object.keys(r.wp_info||{}).length,"work packages"),stat((r.raw_delivs||[]).length,"deliverables"),stat((r.warnings||[]).length,"warnings"),stat(d.company,"company")].join(""); }
+    else if(kind==="tasks"){ const r=d.result||{}; res = [stat((r.raw_tasks||[]).length,"tasks"),stat((r.failed_wps||[]).length,"failed WPs"),stat(d.company,"company")].join(""); }
+    else if(kind==="planner_push"){ res = [stat("✓","submitted"),stat(d.company,"company")].join(""); }
+    else if(kind==="github_payload"){ const p=d.github_payload||{}; res = [stat((p.milestones||[]).length,"milestones"),stat((p.issues||[]).length,"issues"),stat((p.labels||[]).length,"labels")].join(""); }
+    else if(kind==="github_push"){ const g=d.github||{}; const created=Object.keys(g.issue_map||{}).length-(g.skipped_issues||[]).length; res = [stat(Object.keys(g.milestone_map||{}).length,"milestones"),stat(created,"issues created"),stat((g.skipped_issues||[]).length,"skipped")].join(""); }
+    
+    if(duration) res += stat(duration, "duration");
+    return res;
+  }
+  const roleTag=r=>r==="leader"?`<span class="tag lead">leader</span>`:`<span class="tag part">participant</span>`;
+  const titleOr=t=>esc(t)|| `<span class="untitled">untitled</span>`;
+
+  function renderWPs(d){
+    const wps=d.work_packages||[];
+    if(!wps.length) return `<div class="empty card">No work packages found for <b>${esc(d.company)}</b>. Check the company acronym matches the proposal, or open the raw JSON.</div>`;
+    return wps.map(renderWP).join("");
+  }
+  function renderWP(wp){
+    const m=months(wp.start_month,wp.end_month);
+    const tasks=(wp.tasks||[]).map(renderTask).join("")||`<div class="empty">No tasks for this company in this work package.</div>`;
+    return `<div class="wp" open-state="0">
+      <button class="head" aria-expanded="false"><span class="caret">▸</span><span class="id">${esc(wp.id)}</span>
+      <span class="title">${titleOr(wp.title)}</span>
+      <span class="meta">${roleTag(wp.role)}${wp.leader?`<span class="tag">lead ${esc(wp.leader)}</span>`:""}${wp.effort_pm?`<span class="tag eu">${esc(wp.effort_pm)} PM</span>`:""}${m?`<span class="tag">${esc(m)}</span>`:""}</span></button>
+      <div class="body">${tasks}</div></div>`;
+  }
+  function renderTask(t){
+    const m=months(t.start_month,t.end_month);
+    const partners=(t.partners||[]).map(p=>`<span class="tag part">${esc(p)}</span>`).join("");
+    const delivs=(t.deliverables||[]).map(renderDeliv).join("");
+    return `<div class="task"><div class="trow"><span class="id">${esc(t.id)}</span><span class="title">${titleOr(t.title)}</span>${roleTag(t.role)}${m?`<span class="tag">${esc(m)}</span>`:""}</div>
+      ${partners?`<div class="chips">${partners}</div>`:""}${t.description?`<p class="desc">${esc(t.description)}</p>`:""}${delivs?`<div class="delivs">${delivs}</div>`:""}</div>`;
+  }
+  function renderDeliv(d){
+    const due=(d.due_months||[]).join(", ");
+    return `<div class="deliv"><span class="id">${esc(d.id)}</span><span>${esc(d.name)||'<span class="untitled">unnamed</span>'}</span>${d.type?`<span class="tag">${esc(d.type)}</span>`:""}${d.dissemination?`<span class="tag">${esc(d.dissemination)}</span>`:""}${d.lead?`<span class="tag">lead ${esc(d.lead)}</span>`:""}${due?`<span class="tag">due ${esc(due)}</span>`:""}</div>`;
+  }
+
+  function renderTables(d){
+    const r=d.result||{}; const info=r.wp_info||{}; const effort=r.effort||{};
+    const ids=Object.keys(info); let out="";
+    if(r.warnings && r.warnings.length) out+=`<div class="note warn"><b>${r.warnings.length} warning(s):</b><br>${r.warnings.map(esc).join("<br>")}</div>`;
+    if(!ids.length) out+=`<div class="empty card">No work-package rows parsed. The Section 3 tables may be in an unrecognised format.</div>`;
+    else out+=`<div class="card"><h2>Work-package summary</h2><div class="scroll"><table class="tbl">
+      <thead><tr><th>WP</th><th>Title</th><th>Leader</th><th class="num">PMs</th><th>Start</th><th>End</th><th class="num">${esc(d.company)} PM</th></tr></thead><tbody>
+      ${ids.map(id=>{ const w=info[id]||{}; return `<tr><td class="id">${esc(id)}</td><td>${titleOr(w.title)}</td><td class="mono">${esc(w.leader)}</td><td class="num">${esc(w.pms??"")}</td><td class="mono">${esc(w.start)}</td><td class="mono">${esc(w.end)}</td><td class="num">${esc(effort[id]??"")}</td></tr>`; }).join("")}
+      </tbody></table></div></div>`;
+    const dv=r.raw_delivs||[];
+    if(dv.length) out+=`<div class="card"><h2>Deliverables (${dv.length})</h2><div class="scroll"><table class="tbl">
+      <thead><tr><th>ID(s)</th><th>Name</th><th>WP</th><th>Lead</th><th>Type</th><th>Diss.</th><th>Months</th></tr></thead><tbody>
+      ${dv.map(x=>`<tr><td class="id">${esc([].concat(x.ids||x.id||[]).join(", "))}</td><td>${titleOr(x.name)}</td><td class="mono">${esc(x.wp)}</td><td class="mono">${esc(x.lead)}</td><td>${esc(x.type)}</td><td>${esc(x.dissemination)}</td><td class="mono">${esc([].concat(x.months||[]).join(", "))}</td></tr>`).join("")}
+      </tbody></table></div></div>`;
+    return out;
+  }
+
+  function renderTasks(d){
+    const r=d.result||{}; const tasks=r.raw_tasks||[]; const failed=r.failed_wps||[]; let out="";
+    if(failed.length) out+=`<div class="note warn"><b>${failed.length} work package(s) failed extraction:</b><br>${failed.map(f=>`${esc(f.wp_id)} — ${esc(f.error)}`).join("<br>")}</div>`;
+    if(!tasks.length){ out+=`<div class="empty card">No tasks extracted. Stage 2 depends on the LLM (Ollama) and the WP prose sections being found.</div>`; return out; }
+    const byWp={}; tasks.forEach(t=>{ (byWp[t.wp_id||"—"] ||= []).push(t); });
+    out+=Object.keys(byWp).sort().map(wp=>`<div class="wp" open-state="1">
+      <button class="head" aria-expanded="true"><span class="caret">▸</span><span class="id">${esc(wp)}</span><span class="title">${byWp[wp].length} task(s)</span></button>
+      <div class="body">${byWp[wp].map(t=>{ const m=months(t.start_month,t.end_month); const partners=(t.partners||[]).map(p=>`<span class="tag part">${esc(p)}</span>`).join("");
+        return `<div class="task"><div class="trow"><span class="id">${esc(t.id)}</span><span class="title">${titleOr(t.title)}</span>${m?`<span class="tag">${esc(m)}</span>`:""}</div>${partners?`<div class="chips">${partners}</div>`:""}${t.description?`<p class="desc">${esc(t.description)}</p>`:""}</div>`;
+      }).join("")}</div></div>`).join("");
+    return out;
+  }
+
+  function renderPlannerPayload(d){
+    return `<div class="note ok">Payload built — nothing was sent to Microsoft. Review below, then use <b>Planner push</b> to create it.</div>
+      ${renderWPs(d)}
+      <div class="card" style="margin-top:12px"><h2>Planner payload</h2><pre class="raw show" style="position:static">${esc(JSON.stringify(d.planner_payload,null,2))}</pre></div>`;
+  }
+  function renderPlannerPush(d){
+    return `<div class="note ok"><b>Submitted to Microsoft Planner.</b> Response below.</div>
+      <div class="card"><h2>Planner response</h2><pre class="raw show" style="position:static">${esc(JSON.stringify(d.planner,null,2))}</pre></div>`;
+  }
+
+  function renderGithubPayload(d){
+    const p=d.github_payload||{};
+    return `<div class="note ok">Payload built — nothing was created on GitHub. Review below, then use <b>GitHub push</b> to create it.</div>
+      ${renderWPs(d)}
+      <div class="card" style="margin-top:12px"><h2>GitHub payload · ${(p.milestones||[]).length} milestones, ${(p.issues||[]).length} issues, ${(p.labels||[]).length} labels</h2>
+      <pre class="raw show" style="position:static">${esc(JSON.stringify(p,null,2))}</pre></div>`;
+  }
+  function renderGithubPush(d){
+    const g=d.github||{};
+    const owner=$("f_owner")?.value, repo=$("f_repo")?.value;
+    const created=Object.keys(g.issue_map||{}).length-(g.skipped_issues||[]).length;
+    const link = (owner&&repo) ? ` View them at <a href="https://github.com/${esc(owner)}/${esc(repo)}/issues" target="_blank" rel="noopener">${esc(owner)}/${esc(repo)}</a>.` : "";
+    const skipped=(g.skipped_issues||[]).length;
+    const skipNote = skipped ? `<div class="note warn"><b>${skipped} issue(s) already existed</b> and were reused, not duplicated.</div>` : "";
+    return `<div class="note ok"><b>Pushed to GitHub.</b> ${Object.keys(g.milestone_map||{}).length} milestone(s), ${created} issue(s) created.${link}</div>
+      ${skipNote}
+      <div class="card"><h2>GitHub response</h2><pre class="raw show" style="position:static">${esc(JSON.stringify(g,null,2))}</pre></div>`;
+  }
+
+  function wireAccordions(){
+    $("render").querySelectorAll(".wp > .head").forEach(h=>h.addEventListener("click",()=>{
+      const wp=h.parentElement, open=wp.getAttribute("open-state")==="1";
+      wp.setAttribute("open-state",open?"0":"1"); h.setAttribute("aria-expanded",String(!open));
+    }));
+  }
+
+  function showError(e){
+    $("results").classList.add("show"); $("summary").innerHTML=""; $("raw").classList.remove("show"); $("rawBtn").textContent="Show raw JSON";
+    let hint;
+    if(e.status===401) hint="Open Settings, sign in with Keycloak, or paste a valid token.";
+    else if(e.status===503) hint="A backend dependency is unavailable — check Ollama (LLM), Keycloak, or the Microsoft Graph credentials for Planner.";
+    else hint="Check the API base URL and that the API, Redis, and worker containers are running.";
+    $("render").innerHTML=`<div class="err-box"><b>Could not complete the request.</b><br>${esc(e.message)}<br><span style="color:var(--muted)">${hint}</span></div>`;
+  }
+
+  // ---------- health ----------
+  async function checkHealth(){
+    const setBody=h=>{ $("healthBody").innerHTML=h; };
+    setBody(`<div class="empty">Checking…</div>`);
+    try{
+      const res=await fetch(apiUrl("/health"));
+      if(res.ok){ const j=await res.json(); setHealthPill(true); setBody(`<div class="note ok"><b>Service is up.</b> <span class="mono">/health → ${esc(JSON.stringify(j))}</span></div>`); }
+      else { setHealthPill(false); setBody(`<div class="err-box">Health check returned HTTP ${res.status}.</div>`); }
+    }catch(e){ setHealthPill(false); setBody(`<div class="err-box">Could not reach the API. Check the API base URL in Settings and that the gateway is running.</div>`); }
+  }
+  function setHealthPill(ok){ const p=$("healthPill"), l=$("healthLabel"); p.className="pill "+(ok?"on":"bad"); l.textContent=ok?"healthy":"unreachable"; }
+  async function pollHealth(){ try{ const r=await fetch(apiUrl("/health")); setHealthPill(r.ok); }catch{ setHealthPill(false); } }
+
+  // ---------- download / raw ----------
+  function download(){
+    if(!lastData){ toast("Run something first"); return; }
+    const blob=new Blob([JSON.stringify(lastData,null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`${activeOp}-${lastName||"export"}.json`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  // ---------- boot ----------
+  function hydrate(){
+    $("apiBase").value=CFG.apiBase; $("kcUrl").value=CFG.kcUrl; $("kcRealm").value=CFG.kcRealm; $("kcClient").value=CFG.kcClient;
+    $("company").value=CFG.company; $("redirectUri").value=redirectUri; $("startDate").value="2025-01-01";
+  }
+  function wire(){
+    $("drop").addEventListener("click",()=>$("fileInput").click());
+    $("fileInput").addEventListener("change",e=>setFile(e.target.files[0]));
+    ["dragenter","dragover"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.add("hot");}));
+    ["dragleave","drop"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.remove("hot");}));
+    $("drop").addEventListener("drop",e=>setFile(e.dataTransfer.files[0]));
+    $("runBtn").addEventListener("click",run);
+    $("rawBtn").addEventListener("click",()=>{ const on=$("raw").classList.toggle("show"); $("rawBtn").textContent=on?"Hide raw JSON":"Show raw JSON"; });
+    $("dlBtn").addEventListener("click",download);
+    $("healthBtn").addEventListener("click",checkHealth);
+    $("signinBtn").addEventListener("click",signIn);
+    $("signoutBtn").addEventListener("click",()=>{ setAuth(""); $("manualToken").value=""; toast("Signed out"); });
+    $("useTokenBtn").addEventListener("click",()=>{ const t=$("manualToken").value.trim(); if(!t){toast("Paste a token first");return;} setAuth(t); toast("Token set"); });
+    $("authPill").addEventListener("click",()=>selectOp("settings"));
+    $("healthPill").addEventListener("click",()=>selectOp("health"));
+    ["apiBase","kcUrl","kcRealm","kcClient","company"].forEach(id=>$(id).addEventListener("change",saveCfg));
+    $("modalCancel").addEventListener("click",closeModal);
+    $("modalBg").addEventListener("click",e=>{ if(e.target===$("modalBg")) closeModal(); });
+    $("modalOk").addEventListener("click",async()=>{ const op=pendingOp; closeModal(); if(op) await execute(op); });
+  }
+
+  hydrate(); wire(); buildSidebar(); setAuth(token);
+  if(new URLSearchParams(location.search).has("code")) handleCallback();
+  selectOp("extract");
+  pollHealth(); setInterval(pollHealth,30000);
+})();
+</script>
+</body>
+</html>

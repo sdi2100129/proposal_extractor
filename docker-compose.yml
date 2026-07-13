@@ -1,0 +1,152 @@
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - proposal_extractor_ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=4
+    restart: unless-stopped
+
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - proposal_extractor_ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until ollama list >/dev/null 2>&1; do
+          echo "waiting for ollama..."
+          sleep 2
+        done
+        echo "ollama ready, pulling model..."
+        ollama pull qwen2.5:3b
+        echo "done."
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proposal-api
+    expose:
+      - "8000"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-proposal}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-proposal-api}
+      - COMPANY=${COMPANY:-INTRA}
+      - PROPOSAL_START_DATE=${PROPOSAL_START_DATE:-2025-01-01}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MS_TENANT_ID=${MS_TENANT_ID:-}
+      - MS_CLIENT_ID=${MS_CLIENT_ID:-}
+      - MS_CLIENT_SECRET=${MS_CLIENT_SECRET:-}
+      - REDIS_URL=redis://redis:6379/0
+      - JOB_UPLOAD_DIR=/data/uploads
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_API_URL=${GITHUB_API_URL:-https://api.github.com}
+      - GITHUB_OWNER=${GITHUB_OWNER:-}
+      - GITHUB_REPO=${GITHUB_REPO:-}
+    volumes:
+      - proposal_uploads:/data/uploads
+    depends_on:
+      - ollama
+      - keycloak
+      - redis                           # Ensure Redis is up before the API starts, since it relies on it for job queueing.
+    command:
+          [
+            "gunicorn",
+            "proposal_service.main:app",
+            "-c",
+            "gunicorn_conf.py",
+          ]
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: proposal-nginx
+    ports:
+      - "8888:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web:/usr/share/nginx/html:ro 
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.0
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN_USER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: ${KC_HOSTNAME}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-db:5432/keycloak
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres-db
+
+  postgres-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: ${KEYCLOAK_DB_USER}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - proposal_extractor_postgres_data:/var/lib/postgresql/data
+
+  redis:
+      image: redis:7-alpine
+      container_name: proposal-redis
+      command: ["redis-server", "--save", "", "--appendonly", "no"]
+      restart: unless-stopped
+      
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proposal-worker
+    command: ["arq", "proposal_service.worker.WorkerSettings"]
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
+      - REDIS_URL=redis://redis:6379/0
+      - JOB_UPLOAD_DIR=/data/uploads
+      - COMPANY=${COMPANY:-INTRA}
+      - PROPOSAL_START_DATE=${PROPOSAL_START_DATE:-2025-01-01}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - proposal_uploads:/data/uploads
+    depends_on:
+      - ollama
+      - redis
+    restart: unless-stopped
+
+
+volumes:
+  # External volumes — managed outside this compose file.
+  # These are the volumes from the original proposal_extractor project,
+  # preserved so users, Keycloak config, and the Ollama model survive
+  # across project renames. Run `docker volume ls` to confirm they exist.
+  proposal_extractor_ollama_data:
+    external: true
+  proposal_extractor_postgres_data:
+    external: true
+  proposal_uploads: 
