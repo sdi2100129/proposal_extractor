@@ -77,10 +77,10 @@ services:
     ports:
       - "8888:80"
     environment:
-      VIRTUAL_HOST: pe.test2.rid-intrasoft.eu
-      VIRTUAL_PORT: 8888
-      LETSENCRYPT_HOST: pe.test2.rid-intrasoft.eu
-      LETSENCRYPT_EMAIL: aorfanou@netcompany.com
+      #VIRTUAL_HOST: pe.test2.rid-intrasoft.eu
+      #VIRTUAL_PORT: 8888
+      #LETSENCRYPT_HOST: pe.test2.rid-intrasoft.eu
+      #LETSENCRYPT_EMAIL: aorfanou@netcompany.com
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./web:/usr/share/nginx/html:ro 
