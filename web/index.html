@@ -355,27 +355,58 @@
   const sha256 = s => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
 
   async function signIn(){
-    saveCfg();
-    if(!CFG.kcUrl||!CFG.kcRealm||!CFG.kcClient){ toast("Fill in the Keycloak settings first"); return; }
-    const verifier=rand(), challenge=b64url(await sha256(verifier)), state=rand(16);
-    store.set("pkce.verifier",verifier); store.set("pkce.state",state);
-    const q=new URLSearchParams({client_id:CFG.kcClient, redirect_uri:redirectUri, response_type:"code", scope:"openid", state, code_challenge:challenge, code_challenge_method:"S256"});
-    location.assign(`${CFG.kcUrl}/realms/${encodeURIComponent(CFG.kcRealm)}/protocol/openid-connect/auth?${q}`);
+    console.log("[kc] signIn: clicked");
+    try {
+      saveCfg();
+      console.log("[kc] config:", {kcUrl:CFG.kcUrl, realm:CFG.kcRealm, client:CFG.kcClient, redirectUri});
+      if(!CFG.kcUrl||!CFG.kcRealm||!CFG.kcClient){ toast("Fill in the Keycloak settings first"); console.warn("[kc] abort: missing kc settings"); return; }
+
+      console.log("[kc] secure context?", window.isSecureContext, "| crypto.subtle:", !!(window.crypto&&window.crypto.subtle), "| window.sha256:", typeof window.sha256);
+
+      const verifier = rand();
+      console.log("[kc] verifier generated, len", verifier.length);
+
+      const digest = await sha256(verifier);
+      console.log("[kc] sha256 ok, digest bytes:", (digest&&digest.byteLength));
+
+      const challenge = b64url(digest);
+      const state = rand(16);
+      console.log("[kc] challenge:", challenge, "| state:", state);
+
+      store.set("pkce.verifier",verifier); store.set("pkce.state",state);
+
+      const q=new URLSearchParams({client_id:CFG.kcClient, redirect_uri:redirectUri, response_type:"code", scope:"openid", state, code_challenge:challenge, code_challenge_method:"S256"});
+      const authUrl = `${CFG.kcUrl}/realms/${encodeURIComponent(CFG.kcRealm)}/protocol/openid-connect/auth?${q}`;
+      console.log("[kc] redirecting to:", authUrl);
+      location.assign(authUrl);
+    } catch (e) {
+      console.error("[kc] signIn FAILED before redirect:", e);
+      toast("Sign-in failed: "+(e&&e.message||e));
+    }
   }
   async function handleCallback(){
     const p=new URLSearchParams(location.search), code=p.get("code");
-    if(!code){ if(p.get("error")) toast("Sign-in failed: "+p.get("error")); return; }
+    console.log("[kc] handleCallback: code?", !!code, "| error param:", p.get("error"));
+    if(!code){ if(p.get("error")){ console.warn("[kc] IdP returned error:", p.get("error"), p.get("error_description")); toast("Sign-in failed: "+p.get("error")); } return; }
+
     const expState=store.get("pkce.state"), verifier=store.get("pkce.verifier");
+    console.log("[kc] returned state:", p.get("state"), "| expected:", expState, "| verifier present:", !!verifier);
     history.replaceState({},"",redirectUri);
-    if(!verifier || p.get("state")!==expState){ toast("Sign-in state mismatch — try again"); return; }
+
+    if(!verifier || p.get("state")!==expState){ console.warn("[kc] state/verifier mismatch — aborting exchange"); toast("Sign-in state mismatch — try again"); return; }
+
     try{
+      console.log("[kc] exchanging code at token endpoint…");
       const res=await fetch(`${CFG.kcUrl}/realms/${encodeURIComponent(CFG.kcRealm)}/protocol/openid-connect/token`,{
         method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
         body:new URLSearchParams({grant_type:"authorization_code", code, redirect_uri:redirectUri, client_id:CFG.kcClient, code_verifier:verifier}),
       });
-      if(!res.ok) throw new Error(await res.text());
-      setAuth((await res.json()).access_token); toast("Signed in");
-    }catch(e){ toast("Token exchange failed — check client config"); console.error(e); }
+      console.log("[kc] token endpoint status:", res.status);
+      if(!res.ok){ const body=await res.text(); console.error("[kc] token exchange body:", body); throw new Error(body); }
+      const json=await res.json();
+      console.log("[kc] token received, expires_in:", json.expires_in);
+      setAuth(json.access_token); toast("Signed in");
+    }catch(e){ console.error("[kc] token exchange failed:", e); toast("Token exchange failed — check client config"); }
     finally{ store.del("pkce.verifier"); store.del("pkce.state"); }
   }
 
